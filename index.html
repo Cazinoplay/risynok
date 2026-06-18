@@ -5,29 +5,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Preview Editor Pro</title>
     <style>
-        body { font-family: sans-serif; background: #1a1a1a; margin: 0; display: flex; flex-direction: column; align-items: center; overflow: hidden; }
-        
-        .toolbar { background: #333; padding: 10px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; width: 100%; box-sizing: border-box; }
-        
-        /* Стили для холста на весь экран */
-        canvas { 
-            background: white; 
-            touch-action: none; 
-            cursor: crosshair;
-            width: 100vw;
-            height: calc(100vh - 60px); /* Вычитаем высоту панели */
-        }
-        
-        button { padding: 10px; border: none; border-radius: 5px; cursor: pointer; background: #4a4a4a; color: white; }
+        body { font-family: sans-serif; background: #1a1a1a; margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        .toolbar { background: #333; padding: 10px; display: flex; gap: 8px; flex-wrap: wrap; color: white; align-items: center; }
+        canvas { background: white; flex-grow: 1; touch-action: none; cursor: crosshair; }
+        button { padding: 8px 12px; border: none; border-radius: 5px; cursor: pointer; background: #4a4a4a; color: white; }
     </style>
 </head>
 <body>
 
-<div class="toolbar" id="toolbar">
+<div class="toolbar">
+    <select id="projectList" onchange="loadProject()"><option value="">Выбор проекта</option></select>
+    <button onclick="newProject()">➕</button>
     <input type="color" id="colorPicker">
-    <button onclick="toggleFullscreen()">🖥️ Fullscreen</button>
-    <button onclick="saveImage()">💾</button>
-    <button onclick="clearCanvas()">🗑️</button>
+    <input type="range" id="sizeSlider" min="1" max="50" value="5">
+    <button onclick="setTool('brush')">✏️</button>
+    <button onclick="setTool('eraser')">🧹</button>
+    <button onclick="setTool('fill')">🪣</button>
+    <button onclick="addText()">Т</button>
+    <button onclick="saveCurrentProject()">💾</button>
+    <button onclick="toggleFullscreen()">🖥️</button>
 </div>
 
 <canvas id="canvas" width="1920" height="1080"></canvas>
@@ -35,57 +31,100 @@
 <script>
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
-    
-    // Функция включения/выключения полноэкранного режима
-    function toggleFullscreen() {
-        if (!document.fullscreenElement) {
-            document.documentElement.requestFullscreen().catch(err => {
-                alert(`Ошибка перехода в полный экран: ${err.message}`);
-            });
-        } else {
-            document.exitFullscreen();
-        }
-    }
-
-    // Рисование (как в предыдущем примере)
+    const projectList = document.getElementById('projectList');
     let painting = false;
+    let tool = 'brush';
+
+    function setTool(t) { tool = t; }
+
     function getCoords(e) {
         const rect = canvas.getBoundingClientRect();
         const clientX = e.touches ? e.touches[0].clientX : e.clientX;
         const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-        return {
-            x: (clientX - rect.left) * (canvas.width / rect.width),
-            y: (clientY - rect.top) * (canvas.height / rect.height)
-        };
+        return { x: (clientX - rect.left) * (canvas.width / rect.width), y: (clientY - rect.top) * (canvas.height / rect.height) };
+    }
+
+    function start(e) {
+        if(tool === 'fill') {
+            ctx.fillStyle = document.getElementById('colorPicker').value;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            return;
+        }
+        painting = true;
+        draw(e);
     }
 
     function draw(e) {
-        if (!painting) return;
-        e.preventDefault();
+        if (!painting || tool === 'fill') return;
         const pos = getCoords(e);
-        ctx.lineWidth = 10;
+        ctx.lineWidth = document.getElementById('sizeSlider').value;
         ctx.lineCap = 'round';
-        ctx.strokeStyle = document.getElementById('colorPicker').value;
+        ctx.strokeStyle = (tool === 'eraser') ? '#ffffff' : document.getElementById('colorPicker').value;
         ctx.lineTo(pos.x, pos.y);
         ctx.stroke();
         ctx.beginPath();
         ctx.moveTo(pos.x, pos.y);
     }
 
-    canvas.addEventListener('mousedown', (e) => { painting = true; draw(e); });
+    function addText() {
+        const text = prompt("Введите текст:");
+        if (text) {
+            ctx.fillStyle = document.getElementById('colorPicker').value;
+            ctx.font = "bold 80px Arial";
+            ctx.fillText(text, 100, 200);
+        }
+    }
+
+    function newProject() {
+        const name = prompt("Название проекта:");
+        if (name) {
+            localStorage.setItem(name, "");
+            updateProjectSelect();
+            projectList.value = name;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+    }
+
+    function saveCurrentProject() {
+        const name = projectList.value;
+        if (!name) return alert("Сначала выберите или создайте проект!");
+        localStorage.setItem(name, canvas.toDataURL());
+        alert("Проект сохранен!");
+    }
+
+    function loadProject() {
+        const name = projectList.value;
+        const data = localStorage.getItem(name);
+        if (data) {
+            const img = new Image();
+            img.onload = () => {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(img, 0, 0);
+            };
+            img.src = data;
+        }
+    }
+
+    function updateProjectSelect() {
+        projectList.innerHTML = '<option value="">Выбор проекта</option>';
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            const opt = document.createElement('option');
+            opt.value = key; opt.innerHTML = key;
+            projectList.appendChild(opt);
+        }
+    }
+
+    function toggleFullscreen() { document.documentElement.requestFullscreen(); }
+
+    canvas.addEventListener('mousedown', start);
     canvas.addEventListener('mousemove', draw);
     canvas.addEventListener('mouseup', () => { painting = false; ctx.beginPath(); });
-    canvas.addEventListener('touchstart', (e) => { painting = true; draw(e); });
+    canvas.addEventListener('touchstart', start);
     canvas.addEventListener('touchmove', draw);
     canvas.addEventListener('touchend', () => { painting = false; ctx.beginPath(); });
 
-    function clearCanvas() { ctx.clearRect(0, 0, canvas.width, canvas.height); }
-    function saveImage() { 
-        const link = document.createElement('a');
-        link.download = 'preview.png';
-        link.href = canvas.toDataURL();
-        link.click(); 
-    }
+    updateProjectSelect();
 </script>
 </body>
 </html>
