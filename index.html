@@ -1,82 +1,379 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Pro Paint Engine</title>
-    <style>
-        body { margin: 0; background: #222; display: flex; flex-direction: column; height: 100vh; overflow: hidden; font-family: sans-serif; }
-        .toolbar { background: #333; padding: 5px; display: flex; gap: 8px; justify-content: center; color: #aaa; }
-        .tool-group { display: flex; flex-direction: column; align-items: center; font-size: 9px; cursor: pointer; }
-        canvas { background: white; flex-grow: 1; touch-action: none; cursor: crosshair; touch-action: none; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Второй монитор</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    background: #0f1115;
+    color: #eee;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  h1 { font-size: 22px; margin-bottom: 4px; }
+  p.sub { color: #9aa0a6; margin-top: 0; margin-bottom: 30px; text-align: center; }
+
+  .card {
+    background: #1a1d24;
+    border-radius: 16px;
+    padding: 28px;
+    width: 100%;
+    max-width: 420px;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+  }
+
+  .choice-btn {
+    display: block;
+    width: 100%;
+    padding: 18px;
+    margin: 10px 0;
+    border-radius: 12px;
+    border: 2px solid #2a2f3a;
+    background: #20242d;
+    color: #fff;
+    font-size: 17px;
+    cursor: pointer;
+    transition: 0.15s;
+  }
+  .choice-btn:hover { border-color: #4a8cff; background: #232a38; }
+  .choice-btn:active { transform: scale(0.98); }
+
+  input[type=text] {
+    width: 100%;
+    padding: 16px;
+    font-size: 22px;
+    text-align: center;
+    letter-spacing: 4px;
+    border-radius: 10px;
+    border: 2px solid #2a2f3a;
+    background: #14161b;
+    color: #fff;
+    margin: 14px 0;
+  }
+
+  button.action {
+    width: 100%;
+    padding: 16px;
+    font-size: 17px;
+    border-radius: 10px;
+    border: none;
+    background: #4a8cff;
+    color: #fff;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  button.action:active { transform: scale(0.98); }
+  button.action:disabled { background: #3a3f4a; cursor: default; }
+
+  button.secondary {
+    width: 100%;
+    padding: 14px;
+    font-size: 15px;
+    border-radius: 10px;
+    border: 2px solid #2a2f3a;
+    background: transparent;
+    color: #aaa;
+    cursor: pointer;
+    margin-top: 10px;
+  }
+
+  .room-code {
+    font-size: 42px;
+    text-align: center;
+    letter-spacing: 8px;
+    font-weight: 700;
+    color: #4a8cff;
+    margin: 20px 0;
+    user-select: all;
+  }
+
+  .status {
+    text-align: center;
+    color: #9aa0a6;
+    font-size: 14px;
+    margin-top: 14px;
+    min-height: 20px;
+  }
+  .status.ok { color: #4caf50; }
+  .status.err { color: #ff5d5d; }
+  .status.wait { color: #f5b942; }
+
+  #videoWrap {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: #000;
+    z-index: 10;
+  }
+  #remoteVideo {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: #000;
+  }
+  #closeBtn {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: rgba(0,0,0,0.5);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.3);
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 14px;
+    z-index: 11;
+  }
+  #fsBtn {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    background: rgba(0,0,0,0.5);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.3);
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 14px;
+    z-index: 11;
+  }
+
+  .hidden { display: none !important; }
+  .small-note { font-size: 12px; color: #777; margin-top: 16px; text-align: center; line-height: 1.4; }
+</style>
 </head>
 <body>
 
-<div class="toolbar">
-    <div class="tool-group"><button onclick="undo()">↩️</button><span>Отмена</span></div>
-    <div class="tool-group"><input type="color" id="colorPicker"><span>Цвет</span></div>
-    <div class="tool-group"><input type="range" id="sizeSlider" min="2" max="40" value="5"><span>Толщина</span></div>
-    <div class="tool-group"><button onclick="tool='brush'">✏️</button><span>Кисть</span></div>
-    <div class="tool-group"><button onclick="tool='eraser'">🧹</button><span>Ластик</span></div>
-    <div class="tool-group"><button onclick="saveImage()">💾</button><span>Скачать</span></div>
+<div id="screenChoice" class="card">
+  <h1 style="text-align:center;">🖥 Второй монитор</h1>
+  <p class="sub">Выбери роль этого устройства</p>
+  <button class="choice-btn" onclick="goSource()">💻 Это компьютер (источник экрана)</button>
+  <button class="choice-btn" onclick="goReceiver()">📱 Это планшет (смотреть экран)</button>
 </div>
 
-<canvas id="canvas"></canvas>
+<div id="sourceScreen" class="card hidden">
+  <h1 style="text-align:center;">💻 Источник</h1>
+  <p class="sub">Нажми кнопку, выбери экран для захвата, потом скажи планшету этот код</p>
+  <button class="action" id="shareBtn" onclick="startShare()">Поделиться экраном</button>
+  <div id="roomCodeBox" class="hidden">
+    <div class="room-code" id="roomCodeText">----</div>
+    <div class="status" id="sourceStatus">Жду подключения планшета...</div>
+  </div>
+  <button class="secondary" onclick="backToChoice()">← Назад</button>
+</div>
+
+<div id="receiverScreen" class="card hidden">
+  <h1 style="text-align:center;">📱 Приёмник</h1>
+  <p class="sub">Введи код, который показан на компьютере</p>
+  <input type="text" id="codeInput" placeholder="0000" maxlength="6" inputmode="numeric">
+  <button class="action" onclick="connectToRoom()">Подключиться</button>
+  <div class="status" id="receiverStatus"></div>
+  <button class="secondary" onclick="backToChoice()">← Назад</button>
+</div>
+
+<div id="videoWrap">
+  <button id="fsBtn" onclick="toggleFullscreen()">⛶ Полный экран</button>
+  <button id="closeBtn" onclick="location.reload()">✕ Закрыть</button>
+  <video id="remoteVideo" autoplay playsinline></video>
+</div>
+
+<p class="small-note">Видео идёт напрямую между устройствами (WebRTC) по локальной сети.<br>Для первого "знакомства" устройств используется бесплатный публичный сигнальный сервер.</p>
 
 <script>
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
-    let tool = 'brush', painting = false;
-    let history = []; // Для отмены действий
+// =====================================================================
+// Простой сигнальный слой через бесплатный публичный WebSocket-relay
+// (используем открытый relay piesocket/websocket.org echo-подобного типа
+// заменён на надёжный публичный signaling: wss://signaling.example)
+// Чтобы не зависеть от непредсказуемых сторонних echo-серверов,
+// используем общедоступный открытый сигнальный сервер PeerJS Cloud.
+// =====================================================================
 
-    function resize() {
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight - 60;
-        ctx.fillStyle = 'white';
-        ctx.fillRect(0, 0, canvas.width, canvas.height); // Белый фон
+const PEERJS_HOST = "0.peerjs.com";
+const PEERJS_PORT = 443;
+const PEERJS_PATH = "/";
+
+let peer = null;
+let conn = null;
+let call = null;
+let localStream = null;
+let roomCode = null;
+
+function loadPeerJs(callback) {
+  if (window.Peer) { callback(); return; }
+  const script = document.createElement('script');
+  script.src = "https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js";
+  script.onload = callback;
+  script.onerror = () => {
+    document.getElementById('sourceStatus').textContent = "Не удалось загрузить библиотеку связи. Проверь интернет.";
+    document.getElementById('sourceStatus').className = "status err";
+  };
+  document.head.appendChild(script);
+}
+
+function showOnly(id) {
+  ['screenChoice','sourceScreen','receiverScreen'].forEach(x => {
+    document.getElementById(x).classList.toggle('hidden', x !== id);
+  });
+}
+
+function goSource() {
+  showOnly('sourceScreen');
+  loadPeerJs(() => {});
+}
+
+function goReceiver() {
+  showOnly('receiverScreen');
+  loadPeerJs(() => {});
+}
+
+function backToChoice() {
+  if (peer) { try { peer.destroy(); } catch(e){} peer = null; }
+  if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+  document.getElementById('roomCodeBox').classList.add('hidden');
+  document.getElementById('shareBtn').classList.remove('hidden');
+  document.getElementById('shareBtn').disabled = false;
+  showOnly('screenChoice');
+}
+
+function genCode() {
+  return Math.floor(1000 + Math.random() * 9000).toString();
+}
+
+async function startShare() {
+  const shareBtn = document.getElementById('shareBtn');
+  shareBtn.disabled = true;
+  shareBtn.textContent = "Запрашиваю доступ к экрану...";
+
+  try {
+    localStream = await navigator.mediaDevices.getDisplayMedia({
+      video: { frameRate: { ideal: 24, max: 30 } },
+      audio: false
+    });
+  } catch (e) {
+    document.getElementById('sourceStatus').textContent = "Доступ к экрану не дан, либо отменено.";
+    document.getElementById('sourceStatus').className = "status err";
+    document.getElementById('roomCodeBox').classList.remove('hidden');
+    shareBtn.disabled = false;
+    shareBtn.textContent = "Поделиться экраном";
+    return;
+  }
+
+  roomCode = genCode();
+  document.getElementById('roomCodeText').textContent = roomCode;
+  document.getElementById('roomCodeBox').classList.remove('hidden');
+  shareBtn.classList.add('hidden');
+
+  const statusEl = document.getElementById('sourceStatus');
+  statusEl.textContent = "Подключаюсь к серверу...";
+  statusEl.className = "status wait";
+
+  peer = new Peer("monitor-" + roomCode, {
+    host: PEERJS_HOST,
+    port: PEERJS_PORT,
+    path: PEERJS_PATH,
+    secure: true
+  });
+
+  peer.on('open', () => {
+    statusEl.textContent = "Готово! Жду подключения планшета...";
+    statusEl.className = "status wait";
+  });
+
+  peer.on('error', (err) => {
+    statusEl.textContent = "Ошибка связи: " + err.type + ". Попробуй обновить страницу.";
+    statusEl.className = "status err";
+  });
+
+  peer.on('call', (incomingCall) => {
+    incomingCall.answer(localStream);
+    statusEl.textContent = "✅ Планшет подключён! Передаю экран...";
+    statusEl.className = "status ok";
+
+    incomingCall.on('close', () => {
+      statusEl.textContent = "Планшет отключился. Жду подключения...";
+      statusEl.className = "status wait";
+    });
+  });
+
+  localStream.getVideoTracks()[0].addEventListener('ended', () => {
+    statusEl.textContent = "Демонстрация экрана остановлена.";
+    statusEl.className = "status err";
+  });
+}
+
+function connectToRoom() {
+  const codeInput = document.getElementById('codeInput');
+  const statusEl = document.getElementById('receiverStatus');
+  const code = codeInput.value.trim();
+
+  if (!/^\d{4,6}$/.test(code)) {
+    statusEl.textContent = "Введи правильный код (цифры с компьютера).";
+    statusEl.className = "status err";
+    return;
+  }
+
+  statusEl.textContent = "Подключаюсь к серверу...";
+  statusEl.className = "status wait";
+
+  peer = new Peer({
+    host: PEERJS_HOST,
+    port: PEERJS_PORT,
+    path: PEERJS_PATH,
+    secure: true
+  });
+
+  peer.on('open', () => {
+    statusEl.textContent = "Соединяюсь с компьютером...";
+    call = peer.call("monitor-" + code, new MediaStream());
+
+    call.on('stream', (remoteStream) => {
+      const video = document.getElementById('remoteVideo');
+      video.srcObject = remoteStream;
+      document.getElementById('videoWrap').style.display = 'block';
+      statusEl.textContent = "";
+    });
+
+    call.on('error', (err) => {
+      statusEl.textContent = "Не удалось подключиться. Проверь код и что комп его показывает.";
+      statusEl.className = "status err";
+    });
+
+    call.on('close', () => {
+      document.getElementById('videoWrap').style.display = 'none';
+      statusEl.textContent = "Соединение разорвано.";
+      statusEl.className = "status err";
+    });
+  });
+
+  peer.on('error', (err) => {
+    if (err.type === 'peer-unavailable') {
+      statusEl.textContent = "Компьютер с этим кодом не найден. Проверь код и что демонстрация запущена.";
+    } else {
+      statusEl.textContent = "Ошибка связи: " + err.type;
     }
-    window.onload = resize;
+    statusEl.className = "status err";
+  });
+}
 
-    function start(e) {
-        painting = true;
-        history.push(ctx.getImageData(0, 0, canvas.width, canvas.height)); // Сохраняем состояние
-        draw(e);
-    }
+function toggleFullscreen() {
+  const wrap = document.getElementById('videoWrap');
+  if (!document.fullscreenElement) {
+    wrap.requestFullscreen().catch(()=>{});
+  } else {
+    document.exitFullscreen().catch(()=>{});
+  }
+}
 
-    function draw(e) {
-        if (!painting) return;
-        const rect = canvas.getBoundingClientRect();
-        const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
-        const y = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
-
-        ctx.lineWidth = document.getElementById('sizeSlider').value;
-        ctx.lineCap = 'round';
-        ctx.strokeStyle = (tool === 'eraser') ? 'white' : document.getElementById('colorPicker').value;
-        
-        ctx.lineTo(x, y);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(x, y);
-    }
-
-    function undo() {
-        if (history.length > 0) ctx.putImageData(history.pop(), 0, 0);
-    }
-
-    function saveImage() {
-        const link = document.createElement('a');
-        link.download = 'art.png';
-        link.href = canvas.toDataURL('image/png');
-        link.click();
-    }
-
-    canvas.addEventListener('mousedown', start);
-    canvas.addEventListener('mousemove', draw);
-    canvas.addEventListener('mouseup', () => { painting = false; ctx.beginPath(); });
-    canvas.addEventListener('touchstart', start);
-    canvas.addEventListener('touchmove', draw);
-    canvas.addEventListener('touchend', () => { painting = false; ctx.beginPath(); });
+document.getElementById('codeInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') connectToRoom();
+});
 </script>
+
 </body>
 </html>
