@@ -3,41 +3,39 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Preview Editor Pro</title>
+    <title>Lite Paint</title>
     <style>
-        body { font-family: sans-serif; background: #1a1a1a; margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
-        .toolbar { background: #333; padding: 10px; display: flex; gap: 8px; flex-wrap: wrap; color: white; align-items: center; }
-        canvas { background: white; flex-grow: 1; touch-action: none; cursor: crosshair; }
-        button { padding: 8px 12px; border: none; border-radius: 5px; cursor: pointer; background: #4a4a4a; color: white; }
+        body { margin: 0; background: #1a1a1a; display: flex; flex-direction: column; height: 100vh; overflow: hidden; font-family: sans-serif; }
+        .toolbar { background: #222; padding: 8px; display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+        .tool-group { display: flex; flex-direction: column; align-items: center; color: white; font-size: 10px; gap: 2px; }
+        button { padding: 8px; border: none; border-radius: 6px; background: #444; color: white; cursor: pointer; }
+        canvas { background: white; flex-grow: 1; touch-action: none; cursor: crosshair; display: block; }
     </style>
 </head>
 <body>
 
 <div class="toolbar">
-    <select id="projectList" onchange="loadProject()"><option value="">Выбор проекта</option></select>
-    <button onclick="newProject()">➕</button>
-    <input type="color" id="colorPicker">
-    <input type="range" id="sizeSlider" min="1" max="50" value="5">
-    <button onclick="setTool('brush')">✏️</button>
-    <button onclick="setTool('eraser')">🧹</button>
-    <button onclick="setTool('fill')">🪣</button>
-    <button onclick="addText()">Т</button>
-    <button onclick="saveCurrentProject()">💾</button>
-    <button onclick="toggleFullscreen()">🖥️</button>
+    <div class="tool-group"><select id="projectList" onchange="loadProject()"><option>Проекты</option></select><span>Проект</span></div>
+    <div class="tool-group"><button onclick="newProject()">➕</button><span>Новый</span></div>
+    <div class="tool-group"><input type="color" id="colorPicker"><span>Цвет</span></div>
+    <div class="tool-group"><input type="range" id="sizeSlider" min="1" max="30" value="5"><span>Размер</span></div>
+    <div class="tool-group"><button onclick="setTool('brush')">✏️</button><span>Кисть</span></div>
+    <div class="tool-group"><button onclick="setTool('eraser')">🧹</button><span>Ластик</span></div>
+    <div class="tool-group"><button onclick="setTool('fill')">🪣</button><span>Заливка</span></div>
+    <div class="tool-group"><button onclick="addText()">Т</button><span>Текст</span></div>
+    <div class="tool-group"><button onclick="saveCurrentProject()">💾</button><span>Сохр.</span></div>
 </div>
 
-<canvas id="canvas" width="1920" height="1080"></canvas>
+<canvas id="canvas" width="1280" height="720"></canvas>
 
 <script>
     const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
-    const projectList = document.getElementById('projectList');
-    let painting = false;
-    let tool = 'brush';
+    const ctx = canvas.getContext('2d', { alpha: false }); // Оптимизация контекста
+    let painting = false, tool = 'brush';
 
     function setTool(t) { tool = t; }
 
-    function getCoords(e) {
+    function getPos(e) {
         const rect = canvas.getBoundingClientRect();
         const clientX = e.touches ? e.touches[0].clientX : e.clientX;
         const clientY = e.touches ? e.touches[0].clientY : e.clientY;
@@ -51,78 +49,74 @@
             return;
         }
         painting = true;
-        draw(e);
+        const pos = getPos(e);
+        ctx.beginPath();
+        ctx.moveTo(pos.x, pos.y);
     }
 
     function draw(e) {
         if (!painting || tool === 'fill') return;
-        const pos = getCoords(e);
+        e.preventDefault();
+        const pos = getPos(e);
         ctx.lineWidth = document.getElementById('sizeSlider').value;
         ctx.lineCap = 'round';
         ctx.strokeStyle = (tool === 'eraser') ? '#ffffff' : document.getElementById('colorPicker').value;
         ctx.lineTo(pos.x, pos.y);
         ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(pos.x, pos.y);
     }
 
-    function addText() {
-        const text = prompt("Введите текст:");
-        if (text) {
-            ctx.fillStyle = document.getElementById('colorPicker').value;
-            ctx.font = "bold 80px Arial";
-            ctx.fillText(text, 100, 200);
-        }
-    }
+    function end() { painting = false; }
 
+    // События
+    canvas.addEventListener('mousedown', start);
+    canvas.addEventListener('mousemove', draw);
+    canvas.addEventListener('mouseup', end);
+    canvas.addEventListener('touchstart', start);
+    canvas.addEventListener('touchmove', draw);
+    canvas.addEventListener('touchend', end);
+
+    // Функции проектов
     function newProject() {
-        const name = prompt("Название проекта:");
-        if (name) {
-            localStorage.setItem(name, "");
-            updateProjectSelect();
-            projectList.value = name;
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-        }
+        const name = prompt("Имя проекта:");
+        if (name) { localStorage.setItem(name, ""); updateProjectSelect(); }
     }
 
     function saveCurrentProject() {
-        const name = projectList.value;
-        if (!name) return alert("Сначала выберите или создайте проект!");
-        localStorage.setItem(name, canvas.toDataURL());
-        alert("Проект сохранен!");
+        const name = document.getElementById('projectList').value;
+        if (name && name !== "Проекты") {
+            localStorage.setItem(name, canvas.toDataURL());
+            alert("Сохранено!");
+        }
     }
 
     function loadProject() {
-        const name = projectList.value;
+        const name = document.getElementById('projectList').value;
         const data = localStorage.getItem(name);
         if (data) {
             const img = new Image();
-            img.onload = () => {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                ctx.drawImage(img, 0, 0);
-            };
+            img.onload = () => { ctx.clearRect(0,0,canvas.width,canvas.height); ctx.drawImage(img,0,0); };
             img.src = data;
         }
     }
 
     function updateProjectSelect() {
-        projectList.innerHTML = '<option value="">Выбор проекта</option>';
+        const select = document.getElementById('projectList');
+        select.innerHTML = '<option>Проекты</option>';
         for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
             const opt = document.createElement('option');
-            opt.value = key; opt.innerHTML = key;
-            projectList.appendChild(opt);
+            opt.value = opt.innerHTML = localStorage.key(i);
+            select.appendChild(opt);
         }
     }
 
-    function toggleFullscreen() { document.documentElement.requestFullscreen(); }
-
-    canvas.addEventListener('mousedown', start);
-    canvas.addEventListener('mousemove', draw);
-    canvas.addEventListener('mouseup', () => { painting = false; ctx.beginPath(); });
-    canvas.addEventListener('touchstart', start);
-    canvas.addEventListener('touchmove', draw);
-    canvas.addEventListener('touchend', () => { painting = false; ctx.beginPath(); });
+    function addText() {
+        const text = prompt("Текст:");
+        if (text) {
+            ctx.fillStyle = document.getElementById('colorPicker').value;
+            ctx.font = "bold 60px sans-serif";
+            ctx.fillText(text, 50, 100);
+        }
+    }
 
     updateProjectSelect();
 </script>
