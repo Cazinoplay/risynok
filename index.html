@@ -194,9 +194,10 @@
 // используем общедоступный открытый сигнальный сервер PeerJS Cloud.
 // =====================================================================
 
-const PEERJS_HOST = "0.peerjs.com";
-const PEERJS_PORT = 443;
-const PEERJS_PATH = "/";
+const PEER_SERVERS = [
+  { host: "0.peerjs.com", port: 443, path: "/", secure: true },
+  { host: "peerjs-server.fly.dev", port: 443, path: "/", secure: true }
+];
 
 let peer = null;
 let conn = null;
@@ -309,18 +310,19 @@ async function startShare() {
 
 function openSourcePeer(attempt) {
   const statusEl = document.getElementById('sourceStatus');
+  const server = PEER_SERVERS[attempt % PEER_SERVERS.length];
   statusEl.textContent = attempt === 0
     ? "Подключаюсь к серверу..."
-    : "Подключаюсь к серверу... (попытка " + (attempt + 1) + " из 4)";
+    : "Подключаюсь к серверу №" + (attempt % PEER_SERVERS.length + 1) + "... (попытка " + (attempt + 1) + " из 4)";
   statusEl.className = "status wait";
 
   if (peer) { try { peer.destroy(); } catch(e){} }
 
   peer = new Peer("monitor-" + roomCode, {
-    host: PEERJS_HOST,
-    port: PEERJS_PORT,
-    path: PEERJS_PATH,
-    secure: true,
+    host: server.host,
+    port: server.port,
+    path: server.path,
+    secure: server.secure,
     config: ICE_CONFIG
   });
 
