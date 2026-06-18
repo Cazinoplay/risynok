@@ -204,16 +204,45 @@ let call = null;
 let localStream = null;
 let roomCode = null;
 
+// Несколько публичных STUN серверов на случай если основной недоступен —
+// повышает шанс успешного соединения через NAT.
+const ICE_CONFIG = {
+  iceServers: [
+    { urls: "stun:stun.l.google.com:19302" },
+    { urls: "stun:stun1.l.google.com:19302" },
+    { urls: "stun:stun.relay.metered.ca:80" }
+  ]
+};
+
 function loadPeerJs(callback) {
   if (window.Peer) { callback(); return; }
   const script = document.createElement('script');
   script.src = "https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js";
   script.onload = callback;
   script.onerror = () => {
-    document.getElementById('sourceStatus').textContent = "Не удалось загрузить библиотеку связи. Проверь интернет.";
-    document.getElementById('sourceStatus').className = "status err";
+    const fallback = document.createElement('script');
+    fallback.src = "https://cdn.jsdelivr.net/npm/peerjs@1.5.2/dist/peerjs.min.js";
+    fallback.onload = callback;
+    fallback.onerror = () => {
+      document.getElementById('sourceStatus').textContent = "Не удалось загрузить библиотеку связи. Проверь интернет.";
+      document.getElementById('sourceStatus').className = "status err";
+    };
+    document.head.appendChild(fallback);
   };
   document.head.appendChild(script);
+}
+
+function errText(err) {
+  const map = {
+    'peer-unavailable': 'Компьютер с этим кодом не найден. Проверь код и что демонстрация запущена.',
+    'network': 'Проблема с сетью/сервером связи. Сейчас попробую снова...',
+    'server-error': 'Сервер связи временно недоступен. Сейчас попробую снова...',
+    'socket-error': 'Не получилось открыть соединение с сервером связи. Сейчас попробую снова...',
+    'socket-closed': 'Соединение с сервером связи прервалось. Сейчас попробую снова...',
+    'disconnected': 'Отключено от сервера связи. Сейчас попробую снова...',
+    'browser-incompatible': 'Этот браузер не поддерживает нужную технологию (WebRTC). Попробуй Chrome или Firefox.'
+  };
+  return map[err.type] || ('Ошибка: ' + err.type);
 }
 
 function showOnly(id) {
@@ -269,25 +298,51 @@ async function startShare() {
   document.getElementById('roomCodeBox').classList.remove('hidden');
   shareBtn.classList.add('hidden');
 
+  openSourcePeer(0);
+
+  localStream.getVideoTracks()[0].addEventListener('ended', () => {
+    const statusEl = document.getElementById('sourceStatus');
+    statusEl.textContent = "Демонстрация экрана остановлена.";
+    statusEl.className = "status err";
+  });
+}
+
+function openSourcePeer(attempt) {
   const statusEl = document.getElementById('sourceStatus');
-  statusEl.textContent = "Подключаюсь к серверу...";
+  statusEl.textContent = attempt === 0
+    ? "Подключаюсь к серверу..."
+    : "Подключаюсь к серверу... (попытка " + (attempt + 1) + " из 4)";
   statusEl.className = "status wait";
+
+  if (peer) { try { peer.destroy(); } catch(e){} }
 
   peer = new Peer("monitor-" + roomCode, {
     host: PEERJS_HOST,
     port: PEERJS_PORT,
     path: PEERJS_PATH,
-    secure: true
+    secure: true,
+    config: ICE_CONFIG
   });
 
+  let opened = false;
+
   peer.on('open', () => {
+    opened = true;
     statusEl.textContent = "Готово! Жду подключения планшета...";
     statusEl.className = "status wait";
   });
 
   peer.on('error', (err) => {
-    statusEl.textContent = "Ошибка связи: " + err.type + ". Попробуй обновить страницу.";
-    statusEl.className = "status err";
+    console.log('Source peer error:', err.type);
+    if (!opened && attempt < 3) {
+      statusEl.textContent = errText(err);
+      statusEl.className = "status wait";
+      setTimeout(() => openSourcePeer(attempt + 1), 1500);
+    } else {
+      statusEl.textContent = errText(err) + " Если код видишь — пробуй кнопку ниже.";
+      statusEl.className = "status err";
+      showRetrySourceButton();
+    }
   });
 
   peer.on('call', (incomingCall) => {
@@ -300,36 +355,58 @@ async function startShare() {
       statusEl.className = "status wait";
     });
   });
+}
 
-  localStream.getVideoTracks()[0].addEventListener('ended', () => {
-    statusEl.textContent = "Демонстрация экрана остановлена.";
-    statusEl.className = "status err";
-  });
+function showRetrySourceButton() {
+  const box = document.getElementById('roomCodeBox');
+  if (document.getElementById('retrySourceBtn')) return;
+  const btn = document.createElement('button');
+  btn.id = 'retrySourceBtn';
+  btn.className = 'action';
+  btn.style.marginTop = '10px';
+  btn.textContent = 'Попробовать снова';
+  btn.onclick = () => { btn.remove(); openSourcePeer(0); };
+  box.appendChild(btn);
 }
 
 function connectToRoom() {
   const codeInput = document.getElementById('codeInput');
-  const statusEl = document.getElementById('receiverStatus');
   const code = codeInput.value.trim();
 
   if (!/^\d{4,6}$/.test(code)) {
+    const statusEl = document.getElementById('receiverStatus');
     statusEl.textContent = "Введи правильный код (цифры с компьютера).";
     statusEl.className = "status err";
     return;
   }
 
-  statusEl.textContent = "Подключаюсь к серверу...";
+  openReceiverPeer(code, 0);
+}
+
+function openReceiverPeer(code, attempt) {
+  const statusEl = document.getElementById('receiverStatus');
+  statusEl.textContent = attempt === 0
+    ? "Подключаюсь к серверу..."
+    : "Подключаюсь к серверу... (попытка " + (attempt + 1) + " из 4)";
   statusEl.className = "status wait";
+
+  if (peer) { try { peer.destroy(); } catch(e){} }
 
   peer = new Peer({
     host: PEERJS_HOST,
     port: PEERJS_PORT,
     path: PEERJS_PATH,
-    secure: true
+    secure: true,
+    config: ICE_CONFIG
   });
 
+  let opened = false;
+
   peer.on('open', () => {
+    opened = true;
     statusEl.textContent = "Соединяюсь с компьютером...";
+    statusEl.className = "status wait";
+
     call = peer.call("monitor-" + code, new MediaStream());
 
     call.on('stream', (remoteStream) => {
@@ -352,12 +429,20 @@ function connectToRoom() {
   });
 
   peer.on('error', (err) => {
+    console.log('Receiver peer error:', err.type);
     if (err.type === 'peer-unavailable') {
-      statusEl.textContent = "Компьютер с этим кодом не найден. Проверь код и что демонстрация запущена.";
-    } else {
-      statusEl.textContent = "Ошибка связи: " + err.type;
+      statusEl.textContent = errText(err);
+      statusEl.className = "status err";
+      return;
     }
-    statusEl.className = "status err";
+    if (!opened && attempt < 3) {
+      statusEl.textContent = errText(err);
+      statusEl.className = "status wait";
+      setTimeout(() => openReceiverPeer(code, attempt + 1), 1500);
+    } else {
+      statusEl.textContent = errText(err) + " Нажми «Подключиться» ещё раз.";
+      statusEl.className = "status err";
+    }
   });
 }
 
