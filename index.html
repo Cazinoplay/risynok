@@ -3,46 +3,53 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Tablet Preview Editor</title>
+    <title>Preview Editor Pro</title>
     <style>
-        body { font-family: sans-serif; background: #1a1a1a; margin: 0; padding: 10px; display: flex; flex-direction: column; align-items: center; }
-        .toolbar { background: #333; padding: 10px; border-radius: 10px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-bottom: 10px; }
+        body { font-family: sans-serif; background: #1a1a1a; margin: 0; display: flex; flex-direction: column; align-items: center; overflow: hidden; }
         
-        /* Ключевое свойство для планшетов */
+        .toolbar { background: #333; padding: 10px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; width: 100%; box-sizing: border-box; }
+        
+        /* Стили для холста на весь экран */
         canvas { 
             background: white; 
-            border-radius: 8px; 
             touch-action: none; 
-            max-width: 100%; 
-            height: auto;
+            cursor: crosshair;
+            width: 100vw;
+            height: calc(100vh - 60px); /* Вычитаем высоту панели */
         }
         
-        button { padding: 10px; border: none; border-radius: 5px; cursor: pointer; }
+        button { padding: 10px; border: none; border-radius: 5px; cursor: pointer; background: #4a4a4a; color: white; }
     </style>
 </head>
 <body>
 
-<div class="toolbar">
+<div class="toolbar" id="toolbar">
     <input type="color" id="colorPicker">
-    <input type="range" id="sizeSlider" min="1" max="50" value="5">
-    <button onclick="setTool('brush')">✏️</button>
-    <button onclick="setTool('eraser')">🧹</button>
-    <button onclick="clearCanvas()">🗑️</button>
+    <button onclick="toggleFullscreen()">🖥️ Fullscreen</button>
     <button onclick="saveImage()">💾</button>
+    <button onclick="clearCanvas()">🗑️</button>
 </div>
 
-<canvas id="canvas" width="800" height="600"></canvas>
+<canvas id="canvas" width="1920" height="1080"></canvas>
 
 <script>
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
+    
+    // Функция включения/выключения полноэкранного режима
+    function toggleFullscreen() {
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(err => {
+                alert(`Ошибка перехода в полный экран: ${err.message}`);
+            });
+        } else {
+            document.exitFullscreen();
+        }
+    }
+
+    // Рисование (как в предыдущем примере)
     let painting = false;
-    let tool = 'brush';
-
-    function setTool(t) { tool = t; }
-
     function getCoords(e) {
-        // Получаем координаты для Touch и Mouse событий
         const rect = canvas.getBoundingClientRect();
         const clientX = e.touches ? e.touches[0].clientX : e.clientX;
         const clientY = e.touches ? e.touches[0].clientY : e.clientY;
@@ -52,45 +59,30 @@
         };
     }
 
-    function start(e) {
-        painting = true;
-        draw(e);
-    }
-
-    function end() {
-        painting = false;
-        ctx.beginPath();
-    }
-
     function draw(e) {
         if (!painting) return;
-        e.preventDefault(); // Запрещает прокрутку
+        e.preventDefault();
         const pos = getCoords(e);
-        
-        ctx.lineWidth = document.getElementById('sizeSlider').value;
+        ctx.lineWidth = 10;
         ctx.lineCap = 'round';
-        ctx.strokeStyle = (tool === 'eraser') ? '#ffffff' : document.getElementById('colorPicker').value;
-        
+        ctx.strokeStyle = document.getElementById('colorPicker').value;
         ctx.lineTo(pos.x, pos.y);
         ctx.stroke();
         ctx.beginPath();
         ctx.moveTo(pos.x, pos.y);
     }
 
-    // Поддержка мыши
-    canvas.addEventListener('mousedown', start);
+    canvas.addEventListener('mousedown', (e) => { painting = true; draw(e); });
     canvas.addEventListener('mousemove', draw);
-    canvas.addEventListener('mouseup', end);
-
-    // Поддержка планшетов (Touch)
-    canvas.addEventListener('touchstart', start);
+    canvas.addEventListener('mouseup', () => { painting = false; ctx.beginPath(); });
+    canvas.addEventListener('touchstart', (e) => { painting = true; draw(e); });
     canvas.addEventListener('touchmove', draw);
-    canvas.addEventListener('touchend', end);
+    canvas.addEventListener('touchend', () => { painting = false; ctx.beginPath(); });
 
     function clearCanvas() { ctx.clearRect(0, 0, canvas.width, canvas.height); }
     function saveImage() { 
         const link = document.createElement('a');
-        link.download = 'art.png';
+        link.download = 'preview.png';
         link.href = canvas.toDataURL();
         link.click(); 
     }
