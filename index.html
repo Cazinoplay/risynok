@@ -7,7 +7,8 @@
         body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; background: #f0f2f5; margin: 0; padding: 20px; }
         .toolbar { background: white; padding: 15px; border-radius: 12px; display: flex; gap: 10px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
         canvas { background: white; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); cursor: crosshair; }
-        button { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; background: #007bff; color: white; }
+        button { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; background: #007bff; color: white; transition: 0.2s; }
+        button:hover { opacity: 0.8; }
     </style>
 </head>
 <body>
@@ -15,8 +16,10 @@
 <div class="toolbar">
     <input type="color" id="colorPicker" value="#000000">
     <button onclick="setTool('brush')">Кисть</button>
+    <button onclick="setTool('eraser')">Ластик</button>
     <button onclick="setTool('fill')">Заливка</button>
-    <button onclick="addText()">Добавить Текст</button>
+    <button onclick="addText()">Текст</button>
+    <button onclick="saveImage()" style="background: #28a745;">Скачать</button>
     <button onclick="clearCanvas()" style="background: #dc3545;">Очистить</button>
 </div>
 
@@ -30,24 +33,28 @@
 
     function setTool(t) { tool = t; }
 
-    canvas.addEventListener('mousedown', (e) => {
+    function startPosition(e) {
         if (tool === 'fill') {
             ctx.fillStyle = document.getElementById('colorPicker').value;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-        } else {
-            painting = true;
-            draw(e);
+            return;
         }
-    });
+        painting = true;
+        draw(e);
+    }
 
-    canvas.addEventListener('mouseup', () => painting = false);
-    canvas.addEventListener('mousemove', draw);
+    function finishedPosition() {
+        painting = false;
+        ctx.beginPath(); // Сброс пути, чтобы линии не соединялись
+    }
 
     function draw(e) {
-        if (!painting || tool !== 'brush') return;
-        ctx.lineWidth = 5;
+        if (!painting || tool === 'fill') return;
+        
+        ctx.lineWidth = (tool === 'eraser') ? 20 : 5;
         ctx.lineCap = 'round';
-        ctx.strokeStyle = document.getElementById('colorPicker').value;
+        ctx.strokeStyle = (tool === 'eraser') ? '#ffffff' : document.getElementById('colorPicker').value;
+        
         ctx.lineTo(e.clientX - canvas.offsetLeft, e.clientY - canvas.offsetTop);
         ctx.stroke();
         ctx.beginPath();
@@ -58,12 +65,23 @@
         const text = prompt("Введите текст:");
         if (text) {
             ctx.fillStyle = document.getElementById('colorPicker').value;
-            ctx.font = "50px Arial";
+            ctx.font = "bold 60px Arial";
             ctx.fillText(text, 50, 100);
         }
     }
 
+    function saveImage() {
+        const link = document.createElement('a');
+        link.download = 'preview.png';
+        link.href = canvas.toDataURL();
+        link.click();
+    }
+
     function clearCanvas() { ctx.clearRect(0, 0, canvas.width, canvas.height); }
+
+    canvas.addEventListener('mousedown', startPosition);
+    canvas.addEventListener('mouseup', finishedPosition);
+    canvas.addEventListener('mousemove', draw);
 </script>
 </body>
 </html>
